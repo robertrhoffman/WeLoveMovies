@@ -1,42 +1,39 @@
-const asyncErrorBoundary = require("../errors/asyncErrorBoundary");
-const reviewsService = require("./reviews.service");
+const reviewsService = require("./reviews.service")
 
-async function reviewExists(req, res, next) {
-    const foundReview = await reviewsService.read(Number(req.params.reviewId))
-    
-        if (foundReview) {
-        res.locals.review = foundReview;
+async function validateReview(req, res, next) {
+    const { reviewId } = req.params;
+    const review = await reviewsService.read(reviewId);
+
+    if(review){
+        res.locals.review = review;
         return next();
     }
     next({
-        status: 404,
-        message: `Review cannot be found.`,
+        status:404, 
+        message:`cannot be found: ${reviewId}`
     });
 }
 
-async function list(req, res, next) {
-    const data = await reviewsService.list();
-    res.json({ data });
-}
-
-async function destroy(req, res, next) {
-    const reviewId = Number(req.params.reviewId);
-    await reviewsService.destroy(reviewId);
-    res.sendStatus(204);
-}
-
 async function update(req, res, next) {
+
     const updatedReview = {
-        ...req.body.data,
-        review_id: req.params.reviewId,
+      ...req.body.data,
+      review_id: res.locals.review.review_id,
     };
-    await reviewsService.update(updatedReview);
-    const data = await reviewsService.read(updatedReview.review_id);
-    res.json({ data });
+
+     await reviewsService.update(updatedReview);
+
+     res.json({ data: await reviewsService.read(updatedReview.review_id) });
 }
+
+async function destroy(req, res, next){
+    reviewsService.delete(res.locals.review.review_id)
+        .then(() => res.sendStatus(204))
+        .catch(next);
+}
+
 
 module.exports = {
-    list,
-    update: [reviewExists, asyncErrorBoundary(update)],
-    delete: [reviewExists, asyncErrorBoundary(destroy)],
+    update: [validateReview, update],
+    delete: [validateReview, destroy],
 }
